@@ -1,0 +1,22 @@
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+
+
+# IDEs
+.vscode/
+.idea/
+
+# Build
+build/
+dist/
+
+# Logs
+*.log
+
+bills/
