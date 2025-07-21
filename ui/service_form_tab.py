@@ -237,7 +237,10 @@ class ServiceFormTab(QWidget):
         existing_request = self.db.query(ServiceRequest).filter_by(customer_id=customer.id, status='Pending').first()
 
         if not existing_request:
-            existing_request = ServiceRequest(customer_id=customer.id, status='Pending')
+            existing_request = ServiceRequest(customer_id=customer.id, 
+                                          company_id=self.user.company_id,
+                                             start_time=None, end_time=None,
+                                              status='Pending')
             self.db.add(existing_request)
             self.db.commit()
 

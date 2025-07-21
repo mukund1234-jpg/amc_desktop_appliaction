@@ -6,21 +6,77 @@ from models import User
 import hashlib
 from PyQt5.QtCore import Qt
 
-
-
 class LoginUI(QWidget):
-    def __init__(self,on_login_success, on_register_clicked):
+    def __init__(self, on_login_success, on_register_clicked):
         super().__init__()
         self.setWindowTitle("Login")
         self.on_login_success = on_login_success
         self.on_register_clicked = on_register_clicked
-        self.setFixedWidth(300)
+        self.setFixedWidth(350)
+        self.setStyleSheet("""
+            QWidget {
+                background: #f5f6fa;
+            }
+            #LoginCard {
+                background: #fff;
+                border-radius: 16px;
+                padding: 32px 24px 24px 24px;
+               
+            }
+            QLabel#Header {
+                font-size: 22px;
+                font-weight: bold;
+                color: #273c75;
+                margin-bottom: 16px;
+            }
+            QLineEdit {
+                border: 1.5px solid #dcdde1;
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 15px;
+                margin-bottom: 12px;
+                background: #f8f9fa;
+            }
+            QLineEdit:focus {
+                border: 1.5px solid #4078c0;
+                background: #fff;
+            }
+            QPushButton#LoginBtn {
+                background: #4078c0;
+                color: #fff;
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 16px;
+                font-weight: bold;
+                margin-top: 8px;
+            }
+            QPushButton#LoginBtn:hover {
+                background: #274472;
+            }
+            QPushButton#RegisterBtn {
+                color: #4078c0;
+                background: none;
+                border: none;
+                text-decoration: underline;
+                font-weight: bold;
+            }
+            QPushButton#RegisterBtn:hover {
+                color: #274472;
+            }
+        """)
 
-        layout = QVBoxLayout()
+        # Center the card
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setAlignment(Qt.AlignCenter)
+        outer_layout.setContentsMargins(0, 60, 0, 60)
+
+        card = QWidget()
+        card.setObjectName("LoginCard")
+        layout = QVBoxLayout(card)
         layout.setSpacing(10)
 
-        header = QLabel("<h2>Company Login</h2>")
-        header.setStyleSheet("text-align: center;")
+        header = QLabel("Login")
+        header.setObjectName("Header")
         header.setAlignment(Qt.AlignCenter)
         layout.addWidget(header)
 
@@ -34,8 +90,8 @@ class LoginUI(QWidget):
         layout.addWidget(self.password_input)
 
         login_btn = QPushButton("Login")
+        login_btn.setObjectName("LoginBtn")
         login_btn.clicked.connect(self.login)
-        login_btn.setStyleSheet("padding: 8px; font-weight: bold;")
         layout.addWidget(login_btn)
 
         # Spacer
@@ -44,15 +100,16 @@ class LoginUI(QWidget):
         register_layout = QHBoxLayout()
         register_label = QLabel("New Company?")
         register_btn = QPushButton("Register")
-        register_btn.setStyleSheet("color: blue; text-decoration: underline; background: none; border: none;")
+        register_btn.setObjectName("RegisterBtn")
         register_btn.setFlat(True)
         register_btn.clicked.connect(self.on_register_clicked)
 
         register_layout.addWidget(register_label)
         register_layout.addWidget(register_btn)
+        register_layout.addStretch()
         layout.addLayout(register_layout)
 
-        self.setLayout(layout)
+        outer_layout.addWidget(card, alignment=Qt.AlignCenter)
 
     def login(self):
         session = SessionLocal()
