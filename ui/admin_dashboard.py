@@ -5,6 +5,11 @@ from PyQt5.QtCore import Qt
 from database import SessionLocal
 from models import User, Customer, ServiceRequest
 from utils.auth import hash_password
+from .admin_service_tab import ServiceTab
+from .create_profile_tab import ProfileTab
+from .add_officeworker_tab import AdminWorkerTab
+# After login, get company_id of admin's company
+
 
 class AdminDashboard(QWidget):
     def __init__(self, user, logout_callback):
@@ -118,7 +123,7 @@ class AdminDashboard(QWidget):
         layout.setSpacing(16)
 
         # Header
-        header = QLabel(f"Admin: {self.user.email} (Company: {self.user.company_id})")
+        header = QLabel(f"Admin: {self.user.email} (Company: {self.user.company.company_name})")
         header.setObjectName("Header")
         header.setAlignment(Qt.AlignCenter)
         layout.addWidget(header)
@@ -129,12 +134,19 @@ class AdminDashboard(QWidget):
         self.tabs.setMovable(False)
         self.tabs.setDocumentMode(True)
 
-        self.tabs.addTab(self.create_worker_tab(), "Office Workers")
+        self.tabs.addTab(AdminWorkerTab(self.session, self.user.company_id), "Office Workers")
         self.tabs.addTab(self.create_customer_tab(), "Customers")
+        # admin pending tab
         self.tabs.addTab(self.create_pending_tab(), "Pending Requests")
+        # admin completed tab
         self.tabs.addTab(self.create_completed_tab(), "Completed Requests")
 
+        self.service_tab = ServiceTab(session=self.session, company_id=self.user.company_id)
+        self.tabs.addTab(self.service_tab, "Services")
         layout.addWidget(self.tabs)
+
+        # --- New Profile Tab ---
+        self.tabs.addTab(ProfileTab(self.session, self.user), "Profile & Company Info")
 
         # Logout button aligned right
         logout_layout = QHBoxLayout()
@@ -147,6 +159,8 @@ class AdminDashboard(QWidget):
 
         self.setLayout(layout)
 
+
+        '''
     # ---------- Workers Tab ----------
     def create_worker_tab(self):
         widget = QWidget()
@@ -209,7 +223,7 @@ class AdminDashboard(QWidget):
             self.workers_table.insertRow(row)
             self.workers_table.setItem(row, 0, QTableWidgetItem(w.email))
             self.workers_table.setItem(row, 1, QTableWidgetItem(w.role))
-
+'''
     # ---------- Customers Tab ----------
     def create_customer_tab(self):
         widget = QWidget()

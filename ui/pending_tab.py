@@ -35,7 +35,7 @@ class PendingRequestsTab(QWidget):
         requests = (
             self.db.query(ServiceRequest)
             .join(Customer)
-            .filter(ServiceRequest.status == 'Pending', Customer.company_id == self.user.company_id)
+            .filter(ServiceRequest.status == 'Pending', Customer.company_id == self.user.company_id, ServiceRequest.created_by == self.user.id)
             .options(joinedload(ServiceRequest.items), joinedload(ServiceRequest.visits))
             .all()
         )
@@ -87,7 +87,7 @@ class PendingRequestsTab(QWidget):
         return max((item.amc_years for item in items), default=0)
 
     def calculate_total_visits(self, items):
-        return sum(3 if item.amc_years == 1 else 9 for item in items)
+        return len([visit for item in items for visit in item.visits])
 
     def show_service_details(self, request):
         details = ""
@@ -113,6 +113,11 @@ class PendingRequestsTab(QWidget):
         )
 
         customer = request.customer
+        company = request.company
+        admin_email = next((u.email for u in company.users if u.role == 'admin'), None)
+        address = next((u.address for u in company.users if u.role == 'admin'), None)  
+        phone = next((u.phone for u in company.users if u.role == 'admin'), None)
+        
         bill_folder = 'bills'
         os.makedirs(bill_folder, exist_ok=True)
         bill_filename = os.path.join(bill_folder, f'bill_{request.id}.pdf')
@@ -123,9 +128,16 @@ class PendingRequestsTab(QWidget):
             'phone': customer.phone,
             'email': customer.email
         }
-
+        
+        company_info = {
+            'name': company.company_name,
+            'address': address or company.address,
+            'phone': phone or company.phone,
+            'email': admin_email or company.email,
+        }
         generate_pdf(
             customer_info,
+            company_info,
             request.items,
             filename=bill_filename,
             start=request.start_time,

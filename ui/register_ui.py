@@ -121,12 +121,12 @@ class RegistrationUI(QWidget):
 
         session = SessionLocal()
         try:
-            existing_company = session.query(Company).filter_by(name=company_name).first()
+            existing_company = session.query(Company).filter_by(company_name=company_name).first()
             if existing_company:
                 QMessageBox.warning(self, "Exists", "Company already exists. Please login.")
                 return
 
-            company = Company(name=company_name)
+            company = Company(company_name=company_name)
             session.add(company)
             session.commit()
 

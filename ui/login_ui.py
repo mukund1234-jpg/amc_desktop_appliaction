@@ -1,10 +1,12 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QLineEdit, QPushButton, QMessageBox, QLabel, QHBoxLayout, QSpacerItem, QSizePolicy
 )
+from requests import session
 from database import SessionLocal
 from models import User
 import hashlib
 from PyQt5.QtCore import Qt
+from sqlalchemy.orm import joinedload
 
 class LoginUI(QWidget):
     def __init__(self, on_login_success, on_register_clicked):
@@ -117,7 +119,10 @@ class LoginUI(QWidget):
         password = self.password_input.text().strip()
         hashed_password = hashlib.sha256(password.encode()).hexdigest()
 
-        user = session.query(User).filter_by(email=email, password=hashed_password).first()
+        
+
+        user = session.query(User).options(joinedload(User.company)).filter_by(email=email,password=hashed_password).first()
+
         session.close()
 
         if user:

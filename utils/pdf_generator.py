@@ -2,7 +2,7 @@ from xhtml2pdf import pisa
 from datetime import datetime
 import os
 
-def generate_pdf(customer, services, filename="invoice.pdf", start=None, end=None):
+def generate_pdf(customer, company, services, filename="invoice.pdf", start=None, end=None):
     invoice_number = f"INV-{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
     service_rows = ""
@@ -18,7 +18,7 @@ def generate_pdf(customer, services, filename="invoice.pdf", start=None, end=Non
             <td>{idx}</td>
             <td>
                 {service.brand} {service.category} AMC CONTRACT<br>
-                {service.amc_years} years {comprehensive_type} AMC with {3 if service.amc_years == 1 else 9} services.
+                {service.amc_years} years {comprehensive_type} AMC with  {len(service.visits)} services.
             </td>
             <td>-</td>
             <td class="right">₹{service.base_price}</td>
@@ -46,10 +46,11 @@ def generate_pdf(customer, services, filename="invoice.pdf", start=None, end=Non
     <body>
 
     <div class="header">
-        <div class="title">SAI ENTERPRISES</div>
+      <
+        <div class="title">{company['name']}</div>
         <div class="subtitle">
-            F 64 SAI KRUPA MALL, OPP DAHISAR STATION, DAHISAR WEST, MUMBAI - 400068<br>
-            Mobile: +91 918433917318 | Email: sai878enterprises@gmail.com
+            Address: {company['address']}<br>
+            Mobile: {company['phone']} | Email: {company['email']}
         </div>
     </div>
 

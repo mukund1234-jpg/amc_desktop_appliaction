@@ -2,77 +2,72 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QLineEdit, QComboBox, QPushButton,
     QTableWidget, QTableWidgetItem, QMessageBox, QSpinBox, QGroupBox, QFormLayout
 )
-from models import Customer, ServiceRequest, ServiceItem
+from models import Customer, ServiceRequest, ServiceItem, ServiceCatalog
+from sqlalchemy.orm import Session
+from datetime import date
 
 
 class ServiceFormTab(QWidget):
-    def __init__(self, db, user, reload_pending_callback):
+    def __init__(self, db: Session, user, reload_pending_callback):
         super().__init__()
         self.db = db
         self.user = user
         self.reload_pending = reload_pending_callback
         self.service_items = []
+        self.catalog_map = {}
         self.current_edit_index = None
         self.setup_ui()
 
     def setup_ui(self):
         main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(10)
 
         # --- Customer Details ---
         customer_group = QGroupBox("Customer Details")
         customer_form = QFormLayout()
-
         self.customer_input = QLineEdit()
-        customer_form.addRow("Name:", self.customer_input)
-
         self.email_input = QLineEdit()
-        customer_form.addRow("Email:", self.email_input)
-
         self.phone_input = QLineEdit()
-        customer_form.addRow("Phone Number:", self.phone_input)
-
         self.address_input = QLineEdit()
+        customer_form.addRow("Name:", self.customer_input)
+        customer_form.addRow("Email:", self.email_input)
+        customer_form.addRow("Phone:", self.phone_input)
         customer_form.addRow("Address:", self.address_input)
-
         customer_group.setLayout(customer_form)
         main_layout.addWidget(customer_group)
 
-        # --- Service Item Details ---
+        # --- Service Item Entry ---
         service_group = QGroupBox("Service Item Details")
         service_form = QFormLayout()
 
-        self.category_input = QComboBox()
-        self.category_input.addItems(['Air Conditioner', 'Chimney', 'Water Purifier', 'Washing Machine', 'Refrigerator', 'Hub'])
-        service_form.addRow("Category:", self.category_input)
-
-        self.brand_input = QLineEdit()
-        service_form.addRow("Brand:", self.brand_input)
-
-        self.type_input = QLineEdit()
-        service_form.addRow("Type:", self.type_input)
+        self.catalog_input = QComboBox()
+        catalogs = self.db.query(ServiceCatalog).filter_by(company_id=self.user.company_id).all()
+        for catalog in catalogs:
+            key = f"{catalog.category} - {catalog.amc_years} Years"
+            self.catalog_map[key] = catalog
+            self.catalog_input.addItem(key)
 
         self.comprehensive_input = QComboBox()
-        self.comprehensive_input.addItems(['Yes', 'No'])
-        service_form.addRow("Comprehensive Type:", self.comprehensive_input)
+        self.comprehensive_input.addItems(["Yes", "No"])
 
+        self.brand_input = QLineEdit()
+        self.type_input = QLineEdit()
         self.quantity_input = QSpinBox()
         self.quantity_input.setRange(1, 100)
-        service_form.addRow("Quantity:", self.quantity_input)
-
-        self.amc_years_input = QComboBox()
-        self.amc_years_input.addItems(['1', '3'])
-        service_form.addRow("AMC Years:", self.amc_years_input)
 
         self.add_item_btn = QPushButton("Add Service Item")
         self.add_item_btn.clicked.connect(self.add_or_update_service_item)
+
+        service_form.addRow("AMC Plan:", self.catalog_input)
+        service_form.addRow("Comprehensive:", self.comprehensive_input)
+        service_form.addRow("Brand:", self.brand_input)
+        service_form.addRow("Type:", self.type_input)
+        service_form.addRow("Quantity:", self.quantity_input)
         service_form.addRow(self.add_item_btn)
 
         service_group.setLayout(service_form)
         main_layout.addWidget(service_group)
 
-        # --- Service Items Table ---
+        # --- Table ---
         self.items_table = QTableWidget(0, 13)
         self.items_table.setHorizontalHeaderLabels([
             'Category', 'Brand', 'Type', 'Comprehensive', 'Qty', 'AMC Years',
@@ -80,7 +75,7 @@ class ServiceFormTab(QWidget):
         ])
         main_layout.addWidget(self.items_table)
 
-        # --- Final Submit Button ---
+        # --- Final Submit ---
         self.submit_form_btn = QPushButton("Submit Full Service Request")
         self.submit_form_btn.clicked.connect(self.submit_full_service_request)
         main_layout.addWidget(self.submit_form_btn)
@@ -90,77 +85,70 @@ class ServiceFormTab(QWidget):
 
     def apply_styles(self):
         self.setStyleSheet("""
-            QGroupBox {
-                font-weight: bold;
-                border: 1px solid #ccc;
-                border-radius: 5px;
-                background-color: #f9f9f9;
-                margin-top: 10px;
-                padding: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px 0 5px;
-            }
-            QPushButton {
-                background-color: #007bff;
-                color: white;
-                border: none;
-                padding: 6px 12px;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #0056b3;
-            }
-            QPushButton:pressed {
-                background-color: #004080;
-            }
-            QLineEdit, QComboBox, QSpinBox {
-                padding: 4px;
-                border: 1px solid #ccc;
-                border-radius: 3px;
-            }
-            QTableWidget {
-                border: 1px solid #ddd;
-                gridline-color: #ddd;
-            }
-            QTableWidget::item {
-                padding: 5px;
-            }
+            QPushButton { background-color: #007bff; color: white; }
+            QPushButton:hover { background-color: #0056b3; }
+            QLineEdit, QComboBox, QSpinBox { padding: 4px; }
         """)
 
-    def calculate_total_price(self, quantity, amc_years, comprehensive):
-        base_price = 1000 if amc_years == 1 else 3000
-        comprehensive_charge = 300 if comprehensive.lower() == 'yes' else 0
-        return (base_price + comprehensive_charge) * quantity
-
     def add_or_update_service_item(self):
-        quantity = self.quantity_input.value()
-        amc_years = int(self.amc_years_input.currentText())
-        comprehensive = self.comprehensive_input.currentText()
-        total_price = self.calculate_total_price(quantity, amc_years, comprehensive)
+        key = self.catalog_input.currentText()
+        catalog = self.catalog_map.get(key)
+        if not catalog:
+            QMessageBox.warning(self, "Invalid Plan", "Please select a valid AMC plan.")
+            return
 
-        item = {
-            'category': self.category_input.currentText(),
+        comprehensive_choice = self.comprehensive_input.currentText()
+
+        item_data = {
+            'catalog': catalog,
             'brand': self.brand_input.text(),
             'type': self.type_input.text(),
-            'comprehensive': comprehensive,
-            'quantity': quantity,
-            'amc_years': amc_years,
+            'quantity': self.quantity_input.value(),
+            'comprehensive': comprehensive_choice,
             'customer_name': self.customer_input.text(),
             'email': self.email_input.text(),
             'phone': self.phone_input.text(),
-            'address': self.address_input.text(),
-            'total_price': total_price
+            'address': self.address_input.text()
         }
 
+        if not all([item_data['brand'], item_data['type'], item_data['customer_name'], item_data['email']]):
+            QMessageBox.warning(self, "Incomplete", "Please fill all required fields.")
+            return
+
+        service_item = ServiceItem(
+            category=catalog.category,
+            brand=item_data['brand'],
+            type=item_data['type'],
+            quantity=item_data['quantity'],
+            amc_years=catalog.amc_years,
+            visits_per_year=catalog.visits_per_year,
+            comprehensive=comprehensive_choice,
+            company_id=self.user.company_id
+        )
+
+        # Manual pricing logic
+        base_price = catalog.price
+        comp_price = catalog.comprehensive_price if comprehensive_choice.lower() == 'yes' else 0
+        total_price = (base_price + comp_price) * item_data['quantity']
+
+        service_item.base_price = base_price
+        service_item.comprehensive_charge = comp_price
+        service_item.total_price = total_price
+
+        item_data.update({
+            'amc_years': catalog.amc_years,
+            'price_per_unit': base_price,
+            'comprehensive_price': comp_price,
+            'total_price': total_price,
+            'service_item': service_item
+        })
+
         if self.current_edit_index is not None:
-            self.service_items[self.current_edit_index] = item
+            self.service_items[self.current_edit_index] = item_data
             self.current_edit_index = None
             self.add_item_btn.setText("Add Service Item")
         else:
-            self.service_items.append(item)
+            self.service_items.append(item_data)
 
         self.update_items_table()
         self.clear_item_fields()
@@ -169,7 +157,7 @@ class ServiceFormTab(QWidget):
         self.items_table.setRowCount(0)
         for idx, item in enumerate(self.service_items):
             self.items_table.insertRow(idx)
-            self.items_table.setItem(idx, 0, QTableWidgetItem(item['category']))
+            self.items_table.setItem(idx, 0, QTableWidgetItem(item['catalog'].category))
             self.items_table.setItem(idx, 1, QTableWidgetItem(item['brand']))
             self.items_table.setItem(idx, 2, QTableWidgetItem(item['type']))
             self.items_table.setItem(idx, 3, QTableWidgetItem(item['comprehensive']))
@@ -179,26 +167,24 @@ class ServiceFormTab(QWidget):
             self.items_table.setItem(idx, 7, QTableWidgetItem(item['email']))
             self.items_table.setItem(idx, 8, QTableWidgetItem(item['phone']))
             self.items_table.setItem(idx, 9, QTableWidgetItem(item['address']))
-            self.items_table.setItem(idx, 10, QTableWidgetItem(f'Rs. {item["total_price"]}'))
+            self.items_table.setItem(idx, 10, QTableWidgetItem(f"Rs. {item['total_price']}"))
 
             update_btn = QPushButton("Update")
-            update_btn.setStyleSheet("background-color: #ffc107; color: black;")
             update_btn.clicked.connect(lambda _, i=idx: self.load_item_for_update(i))
             self.items_table.setCellWidget(idx, 11, update_btn)
 
             delete_btn = QPushButton("Delete")
-            delete_btn.setStyleSheet("background-color: #dc3545; color: white;")
             delete_btn.clicked.connect(lambda _, i=idx: self.delete_service_item(i))
             self.items_table.setCellWidget(idx, 12, delete_btn)
 
     def load_item_for_update(self, index):
         item = self.service_items[index]
-        self.category_input.setCurrentText(item['category'])
+        key = f"{item['catalog'].category} - {item['catalog'].amc_years} Years"
+        self.catalog_input.setCurrentText(key)
+        self.comprehensive_input.setCurrentText(item['comprehensive'])
         self.brand_input.setText(item['brand'])
         self.type_input.setText(item['type'])
-        self.comprehensive_input.setCurrentText(item['comprehensive'])
         self.quantity_input.setValue(item['quantity'])
-        self.amc_years_input.setCurrentText(str(item['amc_years']))
 
         self.customer_input.setText(item['customer_name'])
         self.email_input.setText(item['email'])
@@ -211,73 +197,60 @@ class ServiceFormTab(QWidget):
     def delete_service_item(self, index):
         del self.service_items[index]
         self.update_items_table()
+
     def submit_full_service_request(self):
-        if not self.customer_input.text().strip() or not self.email_input.text().strip():
-            QMessageBox.warning(self, "Missing Info", "Please fill in all customer details.")
+        if not self.customer_input.text() or not self.email_input.text():
+            QMessageBox.warning(self, "Incomplete", "Customer name and email are required.")
             return
-
         if not self.service_items:
-            QMessageBox.warning(self, "Missing Info", "Please add at least one service item before submitting.")
+            QMessageBox.warning(self, "No Items", "Add at least one service item.")
             return
 
-        customer = self.db.query(Customer).filter_by(email=self.email_input.text().strip()).first()
+        customer = self.db.query(Customer).filter_by(
+            company_id=self.user.company_id,
+            email=self.email_input.text()
+        ).first()
+
         if not customer:
             customer = Customer(
-                company_id=self.user.company_id,
-                name=self.customer_input.text().strip(),
-                email=self.email_input.text().strip(),
-                phone=self.phone_input.text().strip(),
-                address=self.address_input.text().strip()
-                
+                name=self.customer_input.text(),
+                email=self.email_input.text(),
+                phone=self.phone_input.text(),
+                address=self.address_input.text(),
+                company_id=self.user.company_id
             )
             self.db.add(customer)
             self.db.commit()
+        
+        create_service_request = self.user.id  # Assuming user has a company_id attribute
+        request = ServiceRequest(
+            customer_id=customer.id,
+            company_id=self.user.company_id,
+            created_by=create_service_request,  # Assuming user has an id attribute
+            status='Pending'
+        )
+        self.db.add(request)
+        self.db.commit()
 
-        # Check if a pending request exists for this customer
-        existing_request = self.db.query(ServiceRequest).filter_by(customer_id=customer.id, status='Pending').first()
-
-        if not existing_request:
-            existing_request = ServiceRequest(customer_id=customer.id, 
-                                          company_id=self.user.company_id,
-                                             start_time=None, end_time=None,
-                                              status='Pending')
-            self.db.add(existing_request)
-            self.db.commit()
-
-        # Add all service items to the existing or new request
         for item in self.service_items:
-            service_item = ServiceItem(
-                request_id=existing_request.id,
-                category=item['category'],
-                brand=item['brand'],
-                type=item['type'],
-                quantity=item['quantity'],
-                amc_years=item['amc_years'],
-                comprehensive=item['comprehensive'],
-                base_price=1000 if item['amc_years'] == 1 else 3000,
-                comprehensive_charge=300 if item['comprehensive'].lower() == 'yes' else 0,
-                total_price=item['total_price'],
-                company_id=self.user.company_id    
-
-            )
+            service_item = item['service_item']
+            service_item.request_id = request.id
             self.db.add(service_item)
 
         self.db.commit()
 
-        QMessageBox.information(self, "Success", "Service Items added to request successfully.")
+        QMessageBox.information(self, "Success", "Service Request created.")
         self.service_items.clear()
         self.update_items_table()
         self.clear_all_fields()
         self.reload_pending()
 
-
     def clear_item_fields(self):
-        self.category_input.setCurrentIndex(0)
+        self.catalog_input.setCurrentIndex(0)
+        self.comprehensive_input.setCurrentIndex(0)
         self.brand_input.clear()
         self.type_input.clear()
-        self.comprehensive_input.setCurrentIndex(0)
         self.quantity_input.setValue(1)
-        self.amc_years_input.setCurrentIndex(0)
 
     def clear_all_fields(self):
         self.customer_input.clear()

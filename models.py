@@ -9,25 +9,39 @@ Base = declarative_base()
 class Company(Base):
     __tablename__ = 'companies'
     id = Column(Integer, primary_key=True)
-    name = Column(String, unique=True, nullable=False)
+    company_name = Column(String, nullable=False)
+    gst_number = Column(String, nullable=True, default="")
+    pan_number = Column(String, nullable=True, default="")
+        # ✅ Add these two fields
+    logo_path = Column(String, nullable=True)        # path to logo image
+    owner_signature_path = Column(String, nullable=True)  # path to owner's sign
 
+    
     users = relationship('User', back_populates='company', cascade='all, delete-orphan')
     customers = relationship('Customer', back_populates='company', cascade='all, delete-orphan')
     service_items = relationship('ServiceItem', back_populates='company', cascade='all, delete-orphan')
     service_requests = relationship('ServiceRequest', back_populates='company', cascade='all, delete-orphan')
+    service_catalogs = relationship('ServiceCatalog', back_populates='company', cascade='all, delete-orphan')
+
 
 
 # ✅ User Model
 class User(Base):
     __tablename__ = 'users'
+    full_name = Column(String, nullable=True)
+    address = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
     id = Column(Integer, primary_key=True)
     email = Column(String, unique=True, nullable=False)
     password = Column(String, nullable=False)
+
+    registration_date = Column(Date, default=date.today)
     role = Column(String, nullable=False)  # 'admin', 'office_worker'
     company_id = Column(Integer, ForeignKey('companies.id'))
 
     company = relationship('Company', back_populates='users')
 
+    
 
 # ✅ Customer Model
 class Customer(Base):
@@ -36,12 +50,24 @@ class Customer(Base):
     company_id = Column(Integer, ForeignKey('companies.id'))
     name = Column(String)
     email = Column(String)
-    phone = Column(String)
+    phone = Column(String, nullable=True)
     address = Column(String)
 
     company = relationship('Company', back_populates='customers')
     requests = relationship('ServiceRequest', back_populates='customer', cascade='all, delete-orphan')
 
+class ServiceCatalog(Base):
+    __tablename__ = 'service_catalogs'
+
+    id = Column(Integer, primary_key=True)
+    company_id = Column(Integer, ForeignKey('companies.id'), nullable=False)
+    category = Column(String, nullable=False)
+    amc_years = Column(Integer, nullable=False)
+    price = Column(Integer, nullable=False)  # total price
+    visits_per_year = Column(Integer, nullable=False)
+    comprehensive_price = Column(Integer, default=False)  # ✅ Added field
+
+    company = relationship('Company', back_populates='service_catalogs')
 
 # ✅ ServiceRequest Model
 class ServiceRequest(Base):
@@ -53,7 +79,7 @@ class ServiceRequest(Base):
     bill_file = Column(String, nullable=True)
     start_time = Column(Date)
     end_time = Column(Date)
-
+    created_by = Column(Integer, ForeignKey('users.id'), nullable=True)  # User who created the request
     customer = relationship('Customer', back_populates='requests')
     company = relationship('Company', back_populates='service_requests')
     items = relationship('ServiceItem', back_populates='request', cascade="all, delete-orphan")
@@ -66,29 +92,25 @@ class ServiceRequest(Base):
         self.status = 'Completed'
         self.generate_visits(session=session)
 
-    def generate_visits(self, session=None):
-        if not self.start_time:
-            self.start_time = date.today()
-
-        if session:
-            session.query(Visit).filter_by(request_id=self.id).delete()
-
+    def generate_visits(self, session):
         for item in self.items:
-            num_visits = 3 if item.amc_years == 1 else 9
-            interval_days = 120
-            for i in range(num_visits):
-                visit_date = self.start_time + timedelta(days=i * interval_days)
+            # Default to 1 if visits_per_year is None
+            visits_per_year = item.visits_per_year or 1
+            amc_years = item.amc_years or 1
+
+            total_visits = visits_per_year * amc_years
+
+            for i in range(total_visits):
                 visit = Visit(
                     request_id=self.id,
-                    service_item_id=item.id,
+                    service_item_id=item.id,    
+                    scheduled_date=self.start_time + timedelta(days=i * 30),  # Example: every 30 days
+                    completed=False,
                     visit_number=i + 1,
-                    scheduled_date=visit_date,
-                    completed=False
                 )
-                if session:
-                    session.add(visit)
-                else:
-                    self.visits.append(visit)
+                session.add(visit)
+
+        session.commit()
 
 
 # ✅ ServiceItem Model
@@ -107,18 +129,20 @@ class ServiceItem(Base):
     base_price = Column(Integer)
     comprehensive_charge = Column(Integer)
     total_price = Column(Integer)
+    visits_per_year = Column(Integer)  
 
     request = relationship('ServiceRequest', back_populates='items')
     company = relationship('Company', back_populates='service_items')
     visits = relationship('Visit', back_populates='service_item', cascade="all, delete-orphan")
-
-    def calculate_pricing(self):
-        self.base_price = 1000 if self.amc_years == 1 else 3000
-        self.comprehensive_charge = 300 if self.comprehensive.lower() == 'yes' else 0
+    
+    def calculate_pricing(self, catalog: ServiceCatalog):
+        self.base_price = catalog.price
+        self.visits_per_year = catalog.visits_per_year  # ✅ store from catalog
+        self.comprehensive_charge = catalog.comprehensive_price if self.comprehensive.lower() == 'yes' else 0
         self.total_price = (self.base_price + self.comprehensive_charge) * self.quantity
 
 
-# ✅ Visit Model
+# ✅ Visit Model Update
 class Visit(Base):
     __tablename__ = 'visits'
     id = Column(Integer, primary_key=True)
@@ -130,3 +154,5 @@ class Visit(Base):
 
     request = relationship('ServiceRequest', back_populates='visits')
     service_item = relationship('ServiceItem', back_populates='visits')
+
+
