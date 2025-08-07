@@ -1,3 +1,4 @@
+from tracemalloc import start
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QPushButton, QMessageBox
 from models import ServiceRequest, Customer
 from sqlalchemy.orm import joinedload
@@ -5,6 +6,8 @@ import os
 import webbrowser
 from ui.scroll import ServiceDetailsDialog
 from functools import partial
+from datetime import datetime, timedelta
+
 
 
 class CompletedRequestsTab(QWidget):
@@ -39,6 +42,11 @@ class CompletedRequestsTab(QWidget):
 
         for req in completed_requests:
             customer = req.customer
+            items = req.items
+            if req.start_time != datetime.now().date():
+                req.start_time = datetime.now().date()
+                req.end_time = req.start_time + timedelta(days=365 * max(item.amc_years for item in items))
+                self.db.commit()
             start = req.start_time.strftime('%Y-%m-%d') if req.start_time else '-'
             end = req.end_time.strftime('%Y-%m-%d') if req.end_time else '-'
 

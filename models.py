@@ -12,7 +12,6 @@ class Company(Base):
     company_name = Column(String, nullable=False)
     gst_number = Column(String, nullable=True, default="")
     pan_number = Column(String, nullable=True, default="")
-        # ✅ Add these two fields
     logo_path = Column(String, nullable=True)        # path to logo image
     owner_signature_path = Column(String, nullable=True)  # path to owner's sign
 
